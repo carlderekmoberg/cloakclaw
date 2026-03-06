@@ -1,0 +1,29 @@
+# .env - Production Config (DO NOT COMMIT)
+
+DATABASE_URL=postgres://admin:Sup3rS3cret!@db.pinnacle-prod.com:5432/maindb
+REDIS_URL=redis://default:r3d1s_p4ss@192.168.1.50:6379
+MONGO_URI=mongodb://root:M0ng0Pass123@10.0.5.20:27017/analytics
+
+API_KEY=sk-proj-abc123def456ghi789jkl012mno345pqr678
+JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.super.secret.token
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+STRIPE_SECRET_KEY=sk_live_51234567890abcdefghijklmnopqrstuvwxyz
+
+# Infrastructure
+PROD_SERVER=45.33.128.104
+STAGING_SERVER=192.168.55.80:8080
+DB_HOST=10.0.3.15
+GATEWAY_MAC=74:AC:B9:D8:5A:4F
+SWITCH_MAC=E0-63-DA-19-A7-32
+
+# Bitcoin treasury wallet
+BTC_WALLET=bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq
+ETH_WALLET=0x742d35Cc6634C0532925a3b844Bc9e7595f2bD38
+
+# Contact
+ADMIN_EMAIL=admin@pinnacle-prod.com
+SUPPORT_PHONE=(408) 555-0199
+WEBHOOK_URL=https://hooks.pinnacle-internal.com/deploy/v2/trigger
+
+# GPS - Office location
+OFFICE_COORDS=37.3382, -121.8863

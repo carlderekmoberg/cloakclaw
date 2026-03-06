@@ -170,9 +170,12 @@
     </div>
     <div class="controls">
       <select id="profileSelect" onchange="updateEntityToggles()">
+        <option value="general" selected>🛡️ General (all types)</option>
         <option value="legal">📜 Legal</option>
         <option value="financial">💰 Financial</option>
-        <option value="email" selected>✉️ Email</option>
+        <option value="email">✉️ Email</option>
+        <option value="code">💻 Code / Config</option>
+        <option value="medical">🏥 Medical / HIPAA</option>
       </select>
       <label class="toggle"><input type="checkbox" id="useLlm" checked> Use LLM (names/companies)</label>
       <button class="primary" id="cloakBtn" onclick="doCloak()">🔒 Cloak Document</button>
@@ -323,9 +326,12 @@ async function checkStatus() {
 
 // Profile entity type definitions
 const PROFILE_ENTITIES = {
+  general: ['person', 'company', 'email', 'phone', 'dollar', 'date', 'ssn', 'account', 'address', 'url', 'api_key', 'ip_address', 'mac_address', 'password', 'crypto_wallet', 'gps', 'vin', 'passport', 'drivers_license', 'medical_id', 'case_number', 'jurisdiction', 'bank', 'percentage'],
   legal: ['person', 'company', 'address', 'dollar', 'date', 'case_number', 'jurisdiction', 'phone', 'email', 'ssn'],
   financial: ['person', 'company', 'account', 'dollar', 'percentage', 'date', 'bank', 'phone', 'email', 'address', 'ssn'],
   email: ['person', 'company', 'email', 'phone', 'dollar', 'date', 'url', 'address', 'account', 'ssn'],
+  code: ['ip_address', 'mac_address', 'password', 'api_key', 'url', 'email', 'account', 'crypto_wallet', 'phone'],
+  medical: ['person', 'company', 'medical_id', 'ssn', 'date', 'address', 'phone', 'email', 'dollar', 'account', 'drivers_license'],
 };
 
 const TYPE_LABELS = {
@@ -333,7 +339,10 @@ const TYPE_LABELS = {
   dollar: '💰 Dollars', date: '📅 Dates', ssn: '🔐 SSNs', account: '🏦 Accounts',
   api_key: '🔑 API Keys', url: '🔗 URLs', address: '📍 Addresses',
   case_number: '⚖️ Case Numbers', jurisdiction: '🏛️ Jurisdictions', bank: '🏦 Banks',
-  percentage: '📊 Percentages',
+  percentage: '📊 Percentages', ip_address: '🌐 IP Addresses', mac_address: '🔌 MAC Addresses',
+  password: '🔑 Passwords/Secrets', crypto_wallet: '🪙 Crypto Wallets', gps: '🌍 GPS Coords',
+  vin: '🚗 VIN Numbers', passport: '🪪 Passports', drivers_license: '🪪 Drivers License',
+  medical_id: '🏥 Medical IDs',
 };
 
 let enabledEntities = new Set();
@@ -391,7 +400,9 @@ const TYPE_ICONS = {
   person: '👤', company: '🏢', email: '📧', phone: '📱', dollar: '💰',
   date: '📅', ssn: '🔐', account: '🏦', api_key: '🔑', url: '🔗',
   address: '📍', case_number: '⚖️', jurisdiction: '🏛️', bank: '🏦',
-  percentage: '📊',
+  percentage: '📊', ip_address: '🌐', mac_address: '🔌', password: '🔑',
+  crypto_wallet: '🪙', gps: '🌍', vin: '🚗', passport: '🪪',
+  drivers_license: '🪪', medical_id: '🏥',
 };
 
 function addProgress(icon, text, cls = '') {

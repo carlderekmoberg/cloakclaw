@@ -55,6 +55,33 @@ export class ReplacementGenerator {
       case 'url':
         replacement = `https://internal-${this._counter('url')}.example.com`;
         break;
+      case 'ip_address':
+        replacement = this._generateIP(original);
+        break;
+      case 'mac_address':
+        replacement = this._generateMAC(original);
+        break;
+      case 'password':
+        replacement = `[REDACTED_SECRET_${this._counter('password')}]`;
+        break;
+      case 'crypto_wallet':
+        replacement = `[REDACTED_WALLET_${this._counter('crypto')}]`;
+        break;
+      case 'gps':
+        replacement = this._shiftGPS(original);
+        break;
+      case 'vin':
+        replacement = this._generateVIN();
+        break;
+      case 'passport':
+        replacement = `Passport #${this._randomAlphaNum(9)}`;
+        break;
+      case 'drivers_license':
+        replacement = `DL #${this._randomAlphaNum(10)}`;
+        break;
+      case 'medical_id':
+        replacement = `MRN-${this._randomAlphaNum(8)}`;
+        break;
       case 'case_number':
         replacement = `Case No. ${2024 + Math.floor(Math.random() * 3)}-CV-${String(Math.floor(Math.random() * 90000) + 10000)}`;
         break;
@@ -159,6 +186,50 @@ export class ReplacementGenerator {
     const b = String(Math.floor(Math.random() * 90) + 10);
     const c = String(Math.floor(Math.random() * 9000) + 1000);
     return `${a}-${b}-${c}`;
+  }
+
+  _generateIP(original) {
+    // Generate a plausible private IP
+    const ranges = ['10.0', '172.16', '192.168'];
+    const base = ranges[this._counter('ip') % 3];
+    const o3 = Math.floor(Math.random() * 255);
+    const o4 = Math.floor(Math.random() * 254) + 1;
+    const ip = `${base}.${o3}.${o4}`;
+    // Preserve port if present
+    const portMatch = original.match(/:(\d+)$/);
+    return portMatch ? `${ip}:${portMatch[1]}` : ip;
+  }
+
+  _generateMAC(original) {
+    const sep = original.includes('-') ? '-' : ':';
+    const parts = [];
+    for (let i = 0; i < 6; i++) {
+      parts.push(Math.floor(Math.random() * 256).toString(16).padStart(2, '0'));
+    }
+    return parts.join(sep).toUpperCase();
+  }
+
+  _shiftGPS(original) {
+    const parts = original.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length !== 2 || parts.some(isNaN)) return '0.0000, 0.0000';
+    // Shift by random offset (0.5-2 degrees)
+    const latShift = (Math.random() * 3 - 1.5);
+    const lonShift = (Math.random() * 3 - 1.5);
+    return `${(parts[0] + latShift).toFixed(6)}, ${(parts[1] + lonShift).toFixed(6)}`;
+  }
+
+  _generateVIN() {
+    const chars = 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789';
+    let vin = '';
+    for (let i = 0; i < 17; i++) vin += chars[Math.floor(Math.random() * chars.length)];
+    return vin;
+  }
+
+  _randomAlphaNum(len) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < len; i++) result += chars[Math.floor(Math.random() * chars.length)];
+    return result;
   }
 
   _generateAccount(original) {

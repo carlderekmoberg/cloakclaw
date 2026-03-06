@@ -10,7 +10,15 @@
   "scripts": {
     "test": "node --test test/*.test.js"
   },
-  "keywords": ["privacy", "ai", "llm", "redaction", "cloaking", "ollama", "openclaw"],
+  "keywords": [
+    "privacy",
+    "ai",
+    "llm",
+    "redaction",
+    "cloaking",
+    "ollama",
+    "openclaw"
+  ],
   "author": "CloakClaw",
   "license": "MIT",
   "dependencies": {
@@ -19,6 +27,7 @@
     "clipboardy": "^4.0.0",
     "commander": "^13.0.0",
     "diff": "^7.0.0",
+    "pdfjs-dist": "^5.5.207",
     "uuid": "^11.0.0",
     "yaml": "^2.7.0"
   }

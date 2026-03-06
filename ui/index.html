@@ -105,6 +105,19 @@
   .entity-breakdown { padding-left: 28px; }
   .entity-breakdown .eb-line { padding: 2px 0; color: var(--dim); font-size: 11px; }
 
+  /* File Upload */
+  .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 12px; position: relative; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .upload-zone .uz-icon { font-size: 24px; margin-bottom: 4px; }
+  .upload-zone .uz-text { font-size: 12px; color: var(--dim); }
+  .upload-zone .uz-text strong { color: var(--accent); }
+  .upload-zone .uz-formats { font-size: 10px; color: var(--dim); margin-top: 4px; opacity: 0.7; }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .file-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; margin-bottom: 8px; }
+  .file-badge .fb-name { color: var(--accent); font-family: monospace; }
+  .file-badge .fb-size { color: var(--dim); }
+  .file-badge .fb-remove { color: var(--red); cursor: pointer; margin-left: 4px; }
+
   .session-detail { margin-top: 16px; }
   .empty { color: var(--dim); font-style: italic; margin-top: 40px; text-align: center; }
 </style>
@@ -134,7 +147,14 @@
     <div class="cloak-grid">
       <div class="textarea-wrap">
         <label>Original Document</label>
-        <textarea id="inputText" placeholder="Paste your sensitive document here..."></textarea>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".pdf,.txt,.md,.csv,.json,.xml,.html,.log,.yaml,.yml,.env,.js,.ts,.py,.sh,.sql,.toml,.ini">
+          <div class="uz-icon">📄</div>
+          <div class="uz-text">Drop a file here or <strong>click to upload</strong></div>
+          <div class="uz-formats">PDF, TXT, MD, CSV, JSON, XML, HTML, code files</div>
+        </div>
+        <div id="fileBadge" style="display:none"></div>
+        <textarea id="inputText" placeholder="...or paste your sensitive document here"></textarea>
       </div>
       <div class="textarea-wrap">
         <label>Cloaked Output</label>
@@ -519,6 +539,53 @@ async function saveSettings() {
 }
 
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// File Upload
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+async function handleFile(file) {
+  const badge = document.getElementById('fileBadge');
+  const sizeKB = (file.size / 1024).toFixed(1);
+  badge.innerHTML = `<div class="file-badge"><span class="fb-name">📄 ${esc(file.name)}</span><span class="fb-size">${sizeKB} KB</span><span class="fb-remove" onclick="clearFile()">✕</span></div>`;
+  badge.style.display = 'block';
+  uploadZone.style.display = 'none';
+
+  // Extract text
+  const status = document.getElementById('cloakStatus');
+  status.innerHTML = '<span class="spinner"></span> Extracting text...';
+  status.style.color = 'var(--dim)';
+
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const r = await fetch(API + '/api/extract', { method: 'POST', body: form });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    document.getElementById('inputText').value = d.text;
+    status.textContent = `✓ Extracted ${d.chars.toLocaleString()} chars from ${d.filename}`;
+    status.style.color = 'var(--green)';
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = 'var(--red)';
+    clearFile();
+  }
+}
+
+function clearFile() {
+  document.getElementById('fileBadge').style.display = 'none';
+  uploadZone.style.display = 'block';
+  fileInput.value = '';
+}
 
 // Init
 checkStatus();

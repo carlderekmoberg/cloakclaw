@@ -8,6 +8,7 @@ import { MappingStore } from './store/sqlite.js';
 import { getConfig, setConfig, getConfigValue } from './config.js';
 import { listProfiles } from './profiles/index.js';
 import { isOllamaAvailable } from './ner/llm-pass.js';
+import { extractText, SUPPORTED_EXTENSIONS } from './extract.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.CLOAKCLAW_PORT || 3900;
@@ -27,6 +28,60 @@ function parseBody(req) {
     });
     req.on('error', reject);
   });
+}
+
+function parseRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+// Simple multipart parser for file uploads
+async function parseMultipart(req) {
+  const contentType = req.headers['content-type'] || '';
+  const boundary = contentType.split('boundary=')[1];
+  if (!boundary) return { fields: {}, files: [] };
+
+  const raw = await parseRawBody(req);
+  const parts = [];
+  const sep = Buffer.from('--' + boundary);
+
+  let start = 0;
+  while (true) {
+    const idx = raw.indexOf(sep, start);
+    if (idx === -1) break;
+    if (start > 0) {
+      // Extract part between separators (skip \r\n after separator)
+      const partData = raw.slice(start, idx - 2); // -2 for \r\n before next boundary
+      parts.push(partData);
+    }
+    start = idx + sep.length + 2; // skip boundary + \r\n
+    if (raw.slice(idx + sep.length, idx + sep.length + 2).toString() === '--') break; // end marker
+  }
+
+  const fields = {};
+  const files = [];
+
+  for (const part of parts) {
+    const headerEnd = part.indexOf('\r\n\r\n');
+    if (headerEnd === -1) continue;
+    const headers = part.slice(0, headerEnd).toString();
+    const body = part.slice(headerEnd + 4);
+
+    const nameMatch = headers.match(/name="([^"]+)"/);
+    const filenameMatch = headers.match(/filename="([^"]+)"/);
+
+    if (filenameMatch) {
+      files.push({ fieldName: nameMatch?.[1], filename: filenameMatch[1], data: body });
+    } else if (nameMatch) {
+      fields[nameMatch[1]] = body.toString();
+    }
+  }
+
+  return { fields, files };
 }
 
 const server = createServer(async (req, res) => {
@@ -80,6 +135,19 @@ const server = createServer(async (req, res) => {
         setConfig(key, value);
       }
       return json(res, { ok: true, config: getConfig() });
+    }
+
+    // POST /api/extract — extract text from uploaded file
+    if (path === '/api/extract' && req.method === 'POST') {
+      try {
+        const { fields, files } = await parseMultipart(req);
+        if (!files.length) return json(res, { error: 'No file uploaded' }, 400);
+        const file = files[0];
+        const text = await extractText(file.data, file.filename);
+        return json(res, { text, filename: file.filename, chars: text.length });
+      } catch (e) {
+        return json(res, { error: e.message }, 400);
+      }
     }
 
     // POST /api/cloak/stream — SSE streaming with progress

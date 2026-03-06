@@ -66,4 +66,13 @@ program
   .argument('[value]', 'value to set')
   .action(configCommand);
 
+program
+  .command('serve')
+  .description('Start the web UI')
+  .option('-p, --port <port>', 'port number', '3900')
+  .action(async (opts) => {
+    process.env.CLOAKCLAW_PORT = opts.port;
+    await import('../src/server.js');
+  });
+
 program.parse();

@@ -252,6 +252,33 @@ const server = createServer(async (req, res) => {
       return json(res, { profiles: listProfiles() });
     }
 
+    // GET /api/features
+    if (path === '/api/features' && req.method === 'GET') {
+      const store = new MappingStore();
+      const requests = store.listFeatureRequests();
+      store.close();
+      return json(res, { requests });
+    }
+
+    // POST /api/features
+    if (path === '/api/features' && req.method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.title) return json(res, { error: 'title is required' }, 400);
+      const store = new MappingStore();
+      store.addFeatureRequest(body.title, body.description, body.email);
+      store.close();
+      return json(res, { ok: true });
+    }
+
+    // POST /api/features/:id/vote
+    if (path.match(/^\/api\/features\/\d+\/vote$/) && req.method === 'POST') {
+      const id = parseInt(path.split('/')[3]);
+      const store = new MappingStore();
+      store.voteFeatureRequest(id);
+      store.close();
+      return json(res, { ok: true });
+    }
+
     // 404
     json(res, { error: 'Not found' }, 404);
   } catch (err) {

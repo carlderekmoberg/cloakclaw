@@ -38,6 +38,16 @@ export class MappingStore {
       CREATE INDEX IF NOT EXISTS idx_mappings_session ON mappings(session_id);
       CREATE INDEX IF NOT EXISTS idx_mappings_replacement ON mappings(session_id, replacement);
 
+      CREATE TABLE IF NOT EXISTS feature_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        email TEXT,
+        status TEXT NOT NULL DEFAULT 'new',
+        votes INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
       CREATE TABLE IF NOT EXISTS allowlist (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         entity TEXT NOT NULL UNIQUE,
@@ -100,6 +110,25 @@ export class MappingStore {
       VALUES (?, ?, ?)
       ON CONFLICT(entity) DO UPDATE SET action = ?, entity_type = ?
     `).run(entity, entityType, action, action, entityType);
+  }
+
+  // Feature requests
+  addFeatureRequest(title, description, email) {
+    return this.db.prepare(`
+      INSERT INTO feature_requests (title, description, email) VALUES (?, ?, ?)
+    `).run(title, description || '', email || '');
+  }
+
+  listFeatureRequests(limit = 50) {
+    return this.db.prepare('SELECT * FROM feature_requests ORDER BY votes DESC, created_at DESC LIMIT ?').all(limit);
+  }
+
+  voteFeatureRequest(id) {
+    this.db.prepare('UPDATE feature_requests SET votes = votes + 1 WHERE id = ?').run(id);
+  }
+
+  updateFeatureRequestStatus(id, status) {
+    this.db.prepare('UPDATE feature_requests SET status = ? WHERE id = ?').run(status, id);
   }
 
   close() {

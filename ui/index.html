@@ -125,6 +125,24 @@
   .entity-chip:not(.active) { background: var(--bg); color: var(--dim); opacity: 0.6; }
   .entity-chip:hover { opacity: 1; }
 
+  /* Feature Request Cards */
+  .fr-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; display: flex; gap: 14px; align-items: flex-start; transition: border-color 0.2s; }
+  .fr-card:hover { border-color: var(--accent); }
+  .fr-vote { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 48px; }
+  .fr-vote button { background: var(--bg3); border: 1px solid var(--border); color: var(--dim); width: 40px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.15s; }
+  .fr-vote button:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.1); }
+  .fr-vote button.voted { border-color: var(--green); color: var(--green); background: rgba(63,185,80,0.1); }
+  .fr-vote .count { font-size: 14px; font-weight: 700; color: var(--text); }
+  .fr-body { flex: 1; }
+  .fr-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .fr-desc { font-size: 12px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
+  .fr-meta { font-size: 11px; color: var(--dim); margin-top: 6px; display: flex; gap: 12px; }
+  .fr-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .fr-status.new { background: rgba(0,212,255,0.15); color: var(--accent); }
+  .fr-status.planned { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .fr-status.done { background: rgba(63,185,80,0.15); color: var(--green); }
+  .fr-empty { text-align: center; color: var(--dim); padding: 40px; font-style: italic; }
+
   .session-detail { margin-top: 16px; }
   .empty { color: var(--dim); font-style: italic; margin-top: 40px; text-align: center; }
 </style>
@@ -144,6 +162,7 @@
   <div class="tab active" data-panel="cloak">🔒 Cloak</div>
   <div class="tab" data-panel="decloak">🔓 Decloak</div>
   <div class="tab" data-panel="sessions">📋 Sessions</div>
+  <div class="tab" data-panel="features">💡 Feature Requests</div>
   <div class="tab" data-panel="settings">⚙️ Settings</div>
 </div>
 
@@ -239,6 +258,40 @@
     <div id="sessionDetail" class="session-detail" style="display:none"></div>
   </div>
 
+  <!-- FEATURE REQUESTS PANEL -->
+  <div class="panel" id="panel-features">
+    <div style="display:flex;gap:24px;align-items:flex-start">
+      <div style="flex:1">
+        <h2 style="font-size:18px;margin-bottom:4px">Feature Requests</h2>
+        <p style="color:var(--dim);font-size:13px;margin-bottom:16px">Vote on existing ideas or submit your own. Most voted features get built first.</p>
+
+        <!-- Submit form -->
+        <div class="settings-group" style="margin-bottom:20px">
+          <h3>✨ Submit a Request</h3>
+          <div class="setting-row">
+            <label>Title</label>
+            <input id="frTitle" placeholder="e.g., Support DOCX files" maxlength="200">
+          </div>
+          <div class="setting-row">
+            <label>Details</label>
+            <input id="frDesc" placeholder="Describe the feature... (optional)">
+          </div>
+          <div class="setting-row">
+            <label>Your email</label>
+            <input id="frEmail" placeholder="For updates (optional)">
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+            <button class="primary" onclick="submitFeature()">🚀 Submit</button>
+            <span id="frStatus" style="font-size:13px;color:var(--dim)"></span>
+          </div>
+        </div>
+
+        <!-- Request list -->
+        <div id="featureList"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings">
     <h2 style="font-size:18px;margin-bottom:4px">Configuration</h2>
@@ -321,6 +374,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.panel === 'sessions') loadSessions();
     if (tab.dataset.panel === 'settings') loadSettings();
     if (tab.dataset.panel === 'decloak') loadSessionSelect();
+    if (tab.dataset.panel === 'features') loadFeatures();
   });
 });
 
@@ -411,6 +465,70 @@ function toggleAllEntities(on) {
 
 // Init entity toggles
 updateEntityToggles();
+
+// Feature Requests
+async function loadFeatures() {
+  try {
+    const r = await fetch(API + '/api/features');
+    const d = await r.json();
+    const el = document.getElementById('featureList');
+    if (!d.requests.length) {
+      el.innerHTML = '<p class="fr-empty">No feature requests yet. Be the first!</p>';
+      return;
+    }
+    el.innerHTML = d.requests.map(f => {
+      const statusClass = f.status === 'planned' ? 'planned' : f.status === 'done' ? 'done' : 'new';
+      return `<div class="fr-card">
+        <div class="fr-vote">
+          <button onclick="voteFeature(${f.id}, this)" title="Upvote">▲</button>
+          <span class="count">${f.votes}</span>
+        </div>
+        <div class="fr-body">
+          <div class="fr-title">${esc(f.title)}</div>
+          ${f.description ? `<div class="fr-desc">${esc(f.description)}</div>` : ''}
+          <div class="fr-meta">
+            <span class="fr-status ${statusClass}">${f.status}</span>
+            <span>${f.created_at}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function submitFeature() {
+  const title = document.getElementById('frTitle').value.trim();
+  if (!title) return;
+  const status = document.getElementById('frStatus');
+  try {
+    await fetch(API + '/api/features', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: document.getElementById('frDesc').value.trim(),
+        email: document.getElementById('frEmail').value.trim(),
+      }),
+    });
+    document.getElementById('frTitle').value = '';
+    document.getElementById('frDesc').value = '';
+    document.getElementById('frEmail').value = '';
+    status.textContent = '✓ Submitted!';
+    status.style.color = 'var(--green)';
+    loadFeatures();
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+}
+
+async function voteFeature(id, btn) {
+  try {
+    await fetch(API + `/api/features/${id}/vote`, { method: 'POST' });
+    btn.classList.add('voted');
+    loadFeatures();
+  } catch {}
+}
 
 // Entity type icons
 const TYPE_ICONS = {

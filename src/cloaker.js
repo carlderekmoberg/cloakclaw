@@ -13,6 +13,11 @@ export class Cloaker {
     this.interactive = opts.interactive || false;
     this.useLlm = opts.useLlm !== false;
     this.isTTY = process.stderr.isTTY;
+    this.onProgress = opts.onProgress || null; // callback(step, data)
+  }
+
+  _emit(step, data = {}) {
+    if (this.onProgress) this.onProgress(step, data);
   }
 
   /**
@@ -33,23 +38,36 @@ export class Cloaker {
       dateShiftDays: generator.dateShiftDays,
     });
 
+    this._emit('init', { sessionId, profile: profile.name, description: profile.description, textLength: text.length });
+
     if (this.isTTY) {
       process.stderr.write(chalk.dim(`Session: ${sessionId}\n`));
       process.stderr.write(chalk.dim(`Profile: ${profile.name} — ${profile.description}\n`));
     }
 
     // Pass 1: Regex
+    this._emit('regex_start', {});
     if (this.isTTY) process.stderr.write(chalk.cyan('⚡ Regex pass... '));
     let entities = regexPass(text, profile.entityTypes);
     if (this.isTTY) process.stderr.write(chalk.cyan(`${entities.length} entities\n`));
 
+    // Summarize found types
+    const typeCounts = {};
+    entities.forEach(e => { typeCounts[e.type] = (typeCounts[e.type] || 0) + 1; });
+    this._emit('regex_done', { count: entities.length, types: typeCounts });
+
     // Pass 2: LLM (if enabled and available)
     if (this.useLlm && profile.llmTypes.length > 0) {
+      this._emit('llm_start', { model: (await import('./config.js')).getConfig().ollama.model });
       if (this.isTTY) process.stderr.write(chalk.cyan('🧠 LLM pass... '));
       const ollamaUp = await isOllamaAvailable();
       if (ollamaUp) {
         const llmEntities = await llmPass(text, profile.name, profile.llmTypes, entities);
         if (this.isTTY) process.stderr.write(chalk.cyan(`${llmEntities.length} additional entities\n`));
+
+        const llmTypeCounts = {};
+        llmEntities.forEach(e => { llmTypeCounts[e.type] = (llmTypeCounts[e.type] || 0) + 1; });
+        this._emit('llm_done', { count: llmEntities.length, types: llmTypeCounts });
 
         // Merge, avoiding overlaps
         const allEntities = [...entities];
@@ -62,6 +80,7 @@ export class Cloaker {
         }
         entities = allEntities.sort((a, b) => a.start - b.start);
       } else {
+        this._emit('llm_unavailable', {});
         if (this.isTTY) {
           process.stderr.write(chalk.yellow('⚠ Ollama not available — regex only\n'));
         }
@@ -72,6 +91,8 @@ export class Cloaker {
     if (this.interactive && entities.length > 0) {
       entities = await this._interactiveApproval(entities);
     }
+
+    this._emit('replacing', { totalEntities: entities.length });
 
     // Generate replacements and build cloaked text
     let cloaked = '';
@@ -109,6 +130,11 @@ export class Cloaker {
     this.store.updateSession(sessionId, {
       cloakedLength: cloaked.length,
       entityCount: stored.size,
+    });
+
+    this._emit('complete', {
+      sessionId, entityCount: stored.size,
+      originalLength: text.length, cloakedLength: cloaked.length,
     });
 
     if (this.isTTY) {

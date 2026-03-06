@@ -88,6 +88,23 @@
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Progress Feed */
+  .progress-feed { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; max-height: 300px; overflow-y: auto; display: none; }
+  .progress-feed.active { display: block; }
+  .progress-line { padding: 3px 0; display: flex; align-items: center; gap: 8px; animation: fadeInLine 0.3s ease; }
+  @keyframes fadeInLine { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  .progress-line .icon { width: 20px; text-align: center; flex-shrink: 0; }
+  .progress-line .text { color: var(--dim); }
+  .progress-line .text.highlight { color: var(--text); }
+  .progress-line .text.success { color: var(--green); font-weight: 600; }
+  .progress-line .text.warn { color: var(--orange); }
+  .progress-line .count { color: var(--accent); font-weight: 600; }
+  .progress-line .typing { display: inline-block; }
+  .progress-line .typing::after { content: ''; display: inline-block; width: 6px; height: 12px; background: var(--accent); margin-left: 2px; animation: blink 0.8s infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+  .entity-breakdown { padding-left: 28px; }
+  .entity-breakdown .eb-line { padding: 2px 0; color: var(--dim); font-size: 11px; }
+
   .session-detail { margin-top: 16px; }
   .empty { color: var(--dim); font-style: italic; margin-top: 40px; text-align: center; }
 </style>
@@ -135,6 +152,7 @@
       <button onclick="copyOutput()">📋 Copy</button>
       <span id="cloakStatus" style="font-size:13px;color:var(--dim)"></span>
     </div>
+    <div class="progress-feed" id="progressFeed"></div>
     <div class="mappings" id="mappingsSection" style="display:none">
       <h3>Entity Mappings</h3>
       <table class="mapping-table">
@@ -231,17 +249,56 @@ async function checkStatus() {
   } catch { }
 }
 
-// Cloak
+// Entity type icons
+const TYPE_ICONS = {
+  person: '👤', company: '🏢', email: '📧', phone: '📱', dollar: '💰',
+  date: '📅', ssn: '🔐', account: '🏦', api_key: '🔑', url: '🔗',
+  address: '📍', case_number: '⚖️', jurisdiction: '🏛️', bank: '🏦',
+  percentage: '📊',
+};
+
+function addProgress(icon, text, cls = '') {
+  const feed = document.getElementById('progressFeed');
+  feed.classList.add('active');
+  const line = document.createElement('div');
+  line.className = 'progress-line';
+  line.innerHTML = `<span class="icon">${icon}</span><span class="text ${cls}">${text}</span>`;
+  feed.appendChild(line);
+  feed.scrollTop = feed.scrollHeight;
+  return line;
+}
+
+function addBreakdown(types) {
+  const feed = document.getElementById('progressFeed');
+  const wrap = document.createElement('div');
+  wrap.className = 'entity-breakdown';
+  for (const [type, count] of Object.entries(types).sort((a,b) => b[1] - a[1])) {
+    const icon = TYPE_ICONS[type] || '🔹';
+    wrap.innerHTML += `<div class="eb-line">${icon} ${count} ${type}${count > 1 ? 's' : ''}</div>`;
+  }
+  feed.appendChild(wrap);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+// Cloak with streaming progress
 async function doCloak() {
   const text = document.getElementById('inputText').value.trim();
   if (!text) return;
   const btn = document.getElementById('cloakBtn');
   const status = document.getElementById('cloakStatus');
+  const feed = document.getElementById('progressFeed');
+
   btn.disabled = true;
-  status.innerHTML = '<span class="spinner"></span> Cloaking...';
+  status.innerHTML = '';
+  feed.innerHTML = '';
+  feed.classList.add('active');
+  document.getElementById('outputText').value = '';
+  document.getElementById('mappingsSection').style.display = 'none';
+
+  let typingLine = null;
 
   try {
-    const r = await fetch(API + '/api/cloak', {
+    const resp = await fetch(API + '/api/cloak/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -250,26 +307,99 @@ async function doCloak() {
         useLlm: document.getElementById('useLlm').checked,
       }),
     });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
 
-    document.getElementById('outputText').value = d.cloaked;
-    lastSessionId = d.sessionId;
-    status.textContent = `✓ ${d.entityCount} entities cloaked — session ${d.sessionId.slice(0,8)}`;
-    status.style.color = 'var(--green)';
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    // Show mappings
-    const tbody = document.getElementById('mappingsBody');
-    tbody.innerHTML = '';
-    d.mappings.forEach(m => {
-      tbody.innerHTML += `<tr><td class="type">${m.type}</td><td class="original">${esc(m.original)}</td><td style="color:var(--dim)">→</td><td class="replacement">${esc(m.replacement)}</td></tr>`;
-    });
-    document.getElementById('mappingsSection').style.display = d.mappings.length ? 'block' : 'none';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+
+      let eventType = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && eventType) {
+          const data = JSON.parse(line.slice(6));
+          handleEvent(eventType, data);
+          eventType = '';
+        }
+      }
+    }
   } catch (e) {
+    addProgress('❌', e.message, 'warn');
     status.textContent = '✗ ' + e.message;
     status.style.color = 'var(--red)';
   } finally {
     btn.disabled = false;
+  }
+}
+
+function handleEvent(event, data) {
+  const status = document.getElementById('cloakStatus');
+
+  if (event === 'progress') {
+    switch (data.step) {
+      case 'init':
+        addProgress('🔒', `Session <span class="count">${data.sessionId.slice(0,8)}…</span>`, 'highlight');
+        addProgress('📜', `Profile: ${data.profile} — ${data.textLength.toLocaleString()} chars`);
+        break;
+      case 'regex_start':
+        addProgress('⚡', 'Scanning with regex patterns<span class="typing"></span>', 'highlight');
+        break;
+      case 'regex_done':
+        // Remove typing indicator from last line
+        document.querySelectorAll('.typing').forEach(el => el.remove());
+        addProgress('✅', `Regex: found <span class="count">${data.count}</span> entities`, 'highlight');
+        if (data.types && Object.keys(data.types).length) addBreakdown(data.types);
+        break;
+      case 'llm_start':
+        addProgress('🧠', `Analyzing with Ollama (${data.model || 'local LLM'})<span class="typing"></span>`, 'highlight');
+        break;
+      case 'llm_done':
+        document.querySelectorAll('.typing').forEach(el => el.remove());
+        if (data.count > 0) {
+          addProgress('✅', `LLM: found <span class="count">${data.count}</span> additional entities`, 'highlight');
+          if (data.types && Object.keys(data.types).length) addBreakdown(data.types);
+        } else {
+          addProgress('✅', 'LLM: no additional entities found');
+        }
+        break;
+      case 'llm_unavailable':
+        document.querySelectorAll('.typing').forEach(el => el.remove());
+        addProgress('⚠️', 'Ollama unavailable — regex only', 'warn');
+        break;
+      case 'replacing':
+        addProgress('🔄', `Generating fake replacements for ${data.totalEntities} entities…`);
+        break;
+      case 'complete':
+        addProgress('✅', `<strong>Document cloaked. ${data.entityCount} entities replaced.</strong>`, 'success');
+        addProgress('📊', `${data.originalLength.toLocaleString()} → ${data.cloakedLength.toLocaleString()} chars`);
+        break;
+    }
+  }
+
+  if (event === 'result') {
+    document.getElementById('outputText').value = data.cloaked;
+    lastSessionId = data.sessionId;
+    status.textContent = `✓ ${data.entityCount} entities cloaked`;
+    status.style.color = 'var(--green)';
+
+    const tbody = document.getElementById('mappingsBody');
+    tbody.innerHTML = '';
+    data.mappings.forEach(m => {
+      tbody.innerHTML += `<tr><td class="type">${m.type}</td><td class="original">${esc(m.original)}</td><td style="color:var(--dim)">→</td><td class="replacement">${esc(m.replacement)}</td></tr>`;
+    });
+    document.getElementById('mappingsSection').style.display = data.mappings.length ? 'block' : 'none';
+  }
+
+  if (event === 'error') {
+    addProgress('❌', data.message, 'warn');
   }
 }
 

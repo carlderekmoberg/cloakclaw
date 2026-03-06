@@ -82,6 +82,54 @@ const server = createServer(async (req, res) => {
       return json(res, { ok: true, config: getConfig() });
     }
 
+    // POST /api/cloak/stream — SSE streaming with progress
+    if (path === '/api/cloak/stream' && req.method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.text) return json(res, { error: 'text is required' }, 400);
+      const profile = body.profile || 'email';
+      const useLlm = body.useLlm !== false;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      const send = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      const cloaker = new Cloaker({
+        interactive: false,
+        useLlm,
+        onProgress: (step, data) => send('progress', { step, ...data }),
+      });
+
+      try {
+        const result = await cloaker.cloak(body.text, profile);
+        const store = new MappingStore();
+        const mappings = store.getMappings(result.sessionId);
+        store.close();
+        send('result', {
+          sessionId: result.sessionId,
+          cloaked: result.cloaked,
+          entityCount: mappings.length,
+          mappings: mappings.map(m => ({
+            original: m.original,
+            replacement: m.replacement,
+            type: m.entity_type,
+          })),
+        });
+      } catch (e) {
+        send('error', { message: e.message });
+      } finally {
+        cloaker.close();
+        res.end();
+      }
+      return;
+    }
+
     // POST /api/cloak
     if (path === '/api/cloak' && req.method === 'POST') {
       const body = await parseBody(req);

@@ -1,12 +1,16 @@
 import { readFileSync, writeFileSync } from 'fs';
+import { basename } from 'path';
 import chalk from 'chalk';
 import { Cloaker } from '../cloaker.js';
+import { extractText } from '../extract.js';
 
 export async function cloakCommand(file, opts) {
   let text;
   if (file) {
     try {
-      text = readFileSync(file, 'utf-8');
+      const buffer = readFileSync(file);
+      const filename = basename(file);
+      text = await extractText(buffer, filename);
     } catch (err) {
       process.stderr.write(chalk.red(`Error reading file: ${err.message}\n`));
       process.exit(1);

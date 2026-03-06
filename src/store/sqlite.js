@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { CONFIG_DIR, ensureConfigDir } from '../config.js';
+import { encrypt, decrypt } from './crypto.js';
 
 const DB_PATH = join(CONFIG_DIR, 'mappings.db');
 
@@ -79,11 +80,16 @@ export class MappingStore {
     this.db.prepare(`
       INSERT INTO mappings (session_id, original, replacement, entity_type)
       VALUES (?, ?, ?, ?)
-    `).run(sessionId, original, replacement, entityType);
+    `).run(sessionId, encrypt(original), encrypt(replacement), entityType);
   }
 
   getMappings(sessionId) {
-    return this.db.prepare('SELECT * FROM mappings WHERE session_id = ? ORDER BY length(original) DESC').all(sessionId);
+    const rows = this.db.prepare('SELECT * FROM mappings WHERE session_id = ? ORDER BY id').all(sessionId);
+    return rows.map(r => ({
+      ...r,
+      original: decrypt(r.original),
+      replacement: decrypt(r.replacement),
+    })).sort((a, b) => b.original.length - a.original.length);
   }
 
   getSession(sessionId) {
@@ -116,11 +122,12 @@ export class MappingStore {
   addFeatureRequest(title, description, email) {
     return this.db.prepare(`
       INSERT INTO feature_requests (title, description, email) VALUES (?, ?, ?)
-    `).run(title, description || '', email || '');
+    `).run(title, description || '', email ? encrypt(email) : '');
   }
 
   listFeatureRequests(limit = 50) {
-    return this.db.prepare('SELECT * FROM feature_requests ORDER BY votes DESC, created_at DESC LIMIT ?').all(limit);
+    const rows = this.db.prepare('SELECT * FROM feature_requests ORDER BY votes DESC, created_at DESC LIMIT ?').all(limit);
+    return rows.map(r => ({ ...r, email: r.email ? decrypt(r.email) : '' }));
   }
 
   voteFeatureRequest(id) {
@@ -129,6 +136,19 @@ export class MappingStore {
 
   updateFeatureRequestStatus(id, status) {
     this.db.prepare('UPDATE feature_requests SET status = ? WHERE id = ?').run(status, id);
+  }
+
+  // Auto-expire old sessions (default 30 days)
+  expireOldSessions(days = 30) {
+    const result = this.db.prepare(`
+      DELETE FROM mappings WHERE session_id IN (
+        SELECT id FROM sessions WHERE created_at < datetime('now', ?)
+      )
+    `).run(`-${days} days`);
+    const sessions = this.db.prepare(`
+      DELETE FROM sessions WHERE created_at < datetime('now', ?)
+    `).run(`-${days} days`);
+    return { expiredSessions: sessions.changes, expiredMappings: result.changes };
   }
 
   close() {

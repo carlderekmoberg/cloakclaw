@@ -12,6 +12,7 @@ import { extractText, SUPPORTED_EXTENSIONS } from './extract.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.CLOAKCLAW_PORT || 3900;
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB max upload
 
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -21,7 +22,12 @@ function json(res, data, status = 200) {
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+    let size = 0;
+    req.on('data', c => {
+      size += c.length;
+      if (size > MAX_FILE_SIZE) { req.destroy(); reject(new Error('Request too large')); return; }
+      chunks.push(c);
+    });
     req.on('end', () => {
       try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
       catch { resolve({}); }
@@ -33,7 +39,12 @@ function parseBody(req) {
 function parseRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+    let size = 0;
+    req.on('data', c => {
+      size += c.length;
+      if (size > MAX_FILE_SIZE) { req.destroy(); reject(new Error('File too large (max 50MB)')); return; }
+      chunks.push(c);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -66,6 +77,16 @@ async function parseMultipart(req) {
 
   return { fields, files };
 }
+
+// Auto-expire old sessions on startup
+try {
+  const _store = new MappingStore();
+  const expiry = _store.expireOldSessions(30);
+  if (expiry.expiredSessions > 0) {
+    console.log(`♻️  Expired ${expiry.expiredSessions} sessions older than 30 days (${expiry.expiredMappings} mappings)`);
+  }
+  _store.close();
+} catch {}
 
 const server = createServer(async (req, res) => {
   // CORS preflight

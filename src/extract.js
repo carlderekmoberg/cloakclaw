@@ -79,8 +79,12 @@ export async function extractText(buffer, filename) {
       return buffer.toString('utf-8');
 
     case 'doc':
-    case 'docx':
-      throw new Error('Word documents not yet supported. Save as PDF or paste the text directly.');
+    case 'docx': {
+      const mammoth = await import('mammoth');
+      const result = await mammoth.default.extractRawText({ buffer });
+      if (!result.value.trim()) throw new Error('Could not extract text from Word document');
+      return result.value;
+    }
 
     default:
       // Try as plain text
@@ -89,6 +93,6 @@ export async function extractText(buffer, filename) {
 }
 
 export const SUPPORTED_EXTENSIONS = [
-  'pdf', 'txt', 'md', 'csv', 'json', 'xml', 'html', 'log',
+  'pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'json', 'xml', 'html', 'log',
   'yaml', 'yml', 'env', 'toml', 'ini', 'js', 'ts', 'py', 'sh', 'sql',
 ];

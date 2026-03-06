@@ -10,6 +10,7 @@ import { listProfiles } from './profiles/index.js';
 import { isOllamaAvailable } from './ner/llm-pass.js';
 import { extractText, SUPPORTED_EXTENSIONS } from './extract.js';
 import { isPasswordProtected, unlockWithPassword, setPassword, removePassword } from './store/crypto.js';
+import { getConfigValue } from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.CLOAKCLAW_PORT || 3900;
@@ -101,6 +102,36 @@ const server = createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://localhost:${PORT}`);
+
+  // Token auth check (if configured)
+  const uiToken = getConfigValue('ui.token');
+  if (uiToken) {
+    const authToken = url.searchParams.get('token') || req.headers['x-cloakclaw-token'] || '';
+    // Allow password status/unlock endpoints without token (chicken-and-egg)
+    const authFree = ['/api/password/status', '/api/password/unlock', '/api/auth/check'];
+    const rawCheck = url.pathname.replace(/^\/cloakclaw/, '');
+    if (!authFree.includes(rawCheck) && authToken !== uiToken) {
+      // Serve auth page for HTML requests, 401 for API
+      if (req.headers.accept?.includes('text/html') && !rawCheck.startsWith('/api/')) {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`<!DOCTYPE html><html><head><title>CloakClaw</title>
+<style>body{background:#0d1117;color:#e6edf3;font-family:system-ui;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}
+.box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:2rem;width:320px;text-align:center}
+h2{margin:0 0 8px}p{color:#8b949e;font-size:13px;margin:0 0 16px}
+input{width:100%;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:14px;box-sizing:border-box;margin-bottom:12px}
+button{width:100%;padding:10px;background:#00d4ff;color:#0d1117;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px}
+.err{color:#f85149;font-size:12px;display:none}</style></head>
+<body><div class="box"><h2>🦀 CloakClaw</h2><p>Enter your access token</p>
+<input id="t" type="password" placeholder="Access token" onkeydown="if(event.key==='Enter')go()">
+<div class="err" id="e">Invalid token</div>
+<button onclick="go()">Unlock</button></div>
+<script>function go(){const t=document.getElementById('t').value;if(t){localStorage.setItem('cloakclaw_token',t);location.href=location.pathname+'?token='+encodeURIComponent(t)}else{document.getElementById('e').style.display='block'}}</script></body></html>`);
+        return;
+      }
+      return json(res, { error: 'Unauthorized' }, 401);
+    }
+  }
+
   // Strip /cloakclaw prefix if proxied through command center
   const rawPath = url.pathname;
   const path = rawPath.startsWith('/cloakclaw') ? rawPath.slice('/cloakclaw'.length) || '/' : rawPath;
@@ -342,6 +373,12 @@ const server = createServer(async (req, res) => {
       }
       removePassword();
       return json(res, { ok: true });
+    }
+
+    // GET /api/auth/check
+    if (path === '/api/auth/check' && req.method === 'GET') {
+      const needsAuth = !!getConfigValue('ui.token');
+      return json(res, { needsAuth, authenticated: true }); // if we got here, we're authed
     }
 
     // 404

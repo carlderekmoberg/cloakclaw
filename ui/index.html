@@ -389,6 +389,17 @@
 <script>
 // Auto-detect API base — works both at localhost:3900 and behind proxy at /cloakclaw/
 const API = window.location.pathname.replace(/\/+$/, '');
+// Auth token handling
+const _urlToken = new URLSearchParams(window.location.search).get('token');
+if (_urlToken) { localStorage.setItem('cloakclaw_token', _urlToken); history.replaceState(null, '', location.pathname); }
+const AUTH_TOKEN = localStorage.getItem('cloakclaw_token') || '';
+const _origFetch = window.fetch;
+window.fetch = function(url, opts = {}) {
+  if (AUTH_TOKEN && typeof url === 'string') {
+    opts.headers = { ...(opts.headers || {}), 'x-cloakclaw-token': AUTH_TOKEN };
+  }
+  return _origFetch.call(this, url, opts);
+};
 let lastSessionId = null;
 
 // Tabs

@@ -11,6 +11,7 @@ import { diffCommand } from '../src/commands/diff.js';
 import { sessionsCommand } from '../src/commands/sessions.js';
 import { sessionCommand } from '../src/commands/session.js';
 import { configCommand } from '../src/commands/config.js';
+import { setupCommand } from '../src/commands/setup.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -65,6 +66,79 @@ program
   .argument('[key]', 'config key (e.g., ollama.model)')
   .argument('[value]', 'value to set')
   .action(configCommand);
+
+program
+  .command('setup')
+  .description('Interactive setup wizard (runs automatically on first use)')
+  .action(setupCommand);
+
+program
+  .command('doctor')
+  .description('Check CloakClaw health — Ollama connection, config, dependencies')
+  .action(async () => {
+    const { existsSync } = await import('fs');
+    const { join } = await import('path');
+    const { homedir } = await import('os');
+    const { isPasswordProtected } = await import('../src/store/crypto.js');
+    const { getConfigValue } = await import('../src/config.js');
+
+    console.log(chalk.cyan.bold('\n  🦀 CloakClaw Doctor\n'));
+
+    // Config
+    const configPath = join(homedir(), '.cloakclaw', 'config.yaml');
+    if (existsSync(configPath)) {
+      console.log(chalk.green('  ✓ Config') + chalk.dim(` — ${configPath}`));
+    } else {
+      console.log(chalk.red('  ✗ Config') + chalk.dim(' — not found. Run: cloakclaw setup'));
+    }
+
+    // Ollama
+    const url = getConfigValue('ollama.url') || 'http://localhost:11434';
+    const model = getConfigValue('ollama.model') || 'qwen2.5:7b';
+    try {
+      const r = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(3000) });
+      if (r.ok) {
+        const d = await r.json();
+        const hasModel = d.models?.some(m => m.name === model || m.name.startsWith(model));
+        console.log(chalk.green('  ✓ Ollama') + chalk.dim(` — ${url}`));
+        if (hasModel) {
+          console.log(chalk.green(`  ✓ Model`) + chalk.dim(` — ${model}`));
+        } else {
+          console.log(chalk.yellow(`  ⚠ Model "${model}" not found`) + chalk.dim(` — run: ollama pull ${model}`));
+        }
+      } else {
+        console.log(chalk.yellow('  ⚠ Ollama') + chalk.dim(` — ${url} responded with ${r.status}`));
+      }
+    } catch {
+      console.log(chalk.yellow('  ⚠ Ollama') + chalk.dim(` — not reachable at ${url} (regex-only mode)`));
+    }
+
+    // pdftotext
+    try {
+      const { execFileSync } = await import('child_process');
+      execFileSync('pdftotext', ['-v'], { stdio: 'pipe' });
+      console.log(chalk.green('  ✓ pdftotext') + chalk.dim(' — poppler installed'));
+    } catch {
+      console.log(chalk.yellow('  ⚠ pdftotext') + chalk.dim(' — not found. Install: brew install poppler'));
+    }
+
+    // Encryption
+    if (isPasswordProtected()) {
+      console.log(chalk.green('  ✓ Security') + chalk.dim(' — password-protected + AES-256-GCM'));
+    } else {
+      console.log(chalk.green('  ✓ Security') + chalk.dim(' — AES-256-GCM (no password)'));
+    }
+
+    // Web UI token
+    const uiToken = getConfigValue('ui.token');
+    if (uiToken) {
+      console.log(chalk.green('  ✓ Web UI') + chalk.dim(' — token-protected'));
+    } else {
+      console.log(chalk.yellow('  ⚠ Web UI') + chalk.dim(' — no access token (open to localhost)'));
+    }
+
+    console.log('');
+  });
 
 program
   .command('password <action>')
@@ -129,5 +203,17 @@ program
     process.env.CLOAKCLAW_PORT = opts.port;
     await import('../src/server.js');
   });
+
+// Auto-trigger setup on first run (if no config and not running setup/doctor/--version/--help)
+import { existsSync as _exists } from 'fs';
+import { homedir as _home } from 'os';
+import { join as _join } from 'path';
+const _configPath = _join(_home(), '.cloakclaw', 'config.yaml');
+const _args = process.argv.slice(2);
+const _isSetup = _args.includes('setup') || _args.includes('doctor') || _args.includes('--version') || _args.includes('-V') || _args.includes('--help') || _args.includes('-h');
+if (!_exists(_configPath) && !_isSetup && _args.length > 0) {
+  console.log(chalk.yellow('\n  First run detected! Running setup wizard...\n'));
+  await setupCommand();
+}
 
 program.parse();

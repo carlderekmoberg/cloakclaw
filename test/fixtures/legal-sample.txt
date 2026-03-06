@@ -1,0 +1,53 @@
+PARTNERSHIP AGREEMENT
+
+This Partnership Agreement ("Agreement") is entered into as of March 15, 2025, by and between:
+
+1. Robert J. Whitfield, an individual residing at 4521 Harbor View Drive, Newport Beach, CA 92660 ("Partner A"), and
+2. Greenleaf Industries, LLC, a Delaware limited liability company with principal offices at 890 Commerce Boulevard, Suite 400, Austin, TX 78701, represented by its Managing Member, Patricia Chen ("Partner B").
+
+RECITALS
+
+WHEREAS, the Parties wish to establish a joint venture under the name "Pacific Horizon Ventures" for the purpose of developing and commercializing advanced wireless networking equipment;
+
+WHEREAS, Partner A shall contribute $2,500,000 in initial capital, representing a 60% ownership interest;
+
+WHEREAS, Partner B shall contribute intellectual property valued at $1,666,667, representing a 40% ownership interest;
+
+NOW, THEREFORE, in consideration of the mutual covenants contained herein, the Parties agree as follows:
+
+1. FORMATION AND NAME
+The partnership shall be known as "Pacific Horizon Ventures" and shall be registered in the State of California, County of Orange, Case No. 2025-CV-44821.
+
+2. TERM
+This Agreement shall commence on March 15, 2025 and continue for a period of ten (10) years unless earlier terminated.
+
+3. CAPITAL CONTRIBUTIONS
+(a) Partner A shall contribute $2,500,000 within thirty (30) days of execution.
+(b) Partner B shall contribute all rights to Patent No. US-2024-0891234.
+(c) Additional capital calls require unanimous consent.
+
+4. PROFIT DISTRIBUTION
+Profits shall be distributed quarterly as follows:
+- First $500,000 annually: 70/30 in favor of Partner A
+- Amounts exceeding $500,000: 55/45 in favor of Partner A
+
+5. MANAGEMENT
+Day-to-day operations managed by Patricia Chen (COO).
+Financial oversight by Robert Whitfield.
+Major decisions (>$100,000) require both partners.
+
+6. CONTACT INFORMATION
+Partner A: robert.whitfield@pacifichorizon.com, (949) 555-0142
+Partner B: patricia.chen@greenleafindustries.com, (512) 555-0198
+Legal Counsel: Morrison & Associates, (213) 555-0167
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
+
+_________________________
+Robert J. Whitfield
+SSN: 487-23-9156
+
+_________________________
+Patricia Chen, Managing Member
+Greenleaf Industries, LLC
+EIN: 84-7291035

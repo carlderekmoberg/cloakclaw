@@ -1,0 +1,25 @@
+{
+  "name": "cloakclaw",
+  "version": "0.1.0",
+  "description": "Local AI privacy proxy — redact sensitive data before sending to cloud LLMs, then restore originals in the response.",
+  "type": "module",
+  "bin": {
+    "cloakclaw": "./bin/cloakclaw.js"
+  },
+  "main": "./src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["privacy", "ai", "llm", "redaction", "cloaking", "ollama", "openclaw"],
+  "author": "CloakClaw",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "chalk": "^5.3.0",
+    "clipboardy": "^4.0.0",
+    "commander": "^13.0.0",
+    "diff": "^7.0.0",
+    "uuid": "^11.0.0",
+    "yaml": "^2.7.0"
+  }
+}

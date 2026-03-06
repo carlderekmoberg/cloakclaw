@@ -67,6 +67,61 @@ program
   .action(configCommand);
 
 program
+  .command('password <action>')
+  .description('Manage database password (set, remove, status)')
+  .action(async (action) => {
+    const { isPasswordProtected, setPassword, removePassword, unlockWithPassword } = await import('../src/store/crypto.js');
+    const readline = await import('node:readline');
+
+    function ask(q) {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+      return new Promise(r => rl.question(q, a => { rl.close(); r(a); }));
+    }
+
+    switch (action) {
+      case 'status':
+        if (isPasswordProtected()) {
+          console.log(chalk.green('🔒 Database is password-protected'));
+        } else {
+          console.log(chalk.yellow('🔓 No password set (using auto-generated key)'));
+        }
+        break;
+
+      case 'set': {
+        if (isPasswordProtected()) {
+          const current = await ask('Current password: ');
+          try { unlockWithPassword(current); } catch { console.error(chalk.red('Wrong password')); process.exit(1); }
+        }
+        const pw = await ask('New password: ');
+        const confirm = await ask('Confirm password: ');
+        if (pw !== confirm) { console.error(chalk.red('Passwords do not match')); process.exit(1); }
+        try {
+          setPassword(pw);
+          console.log(chalk.green('🔒 Password set. All new data will be encrypted with this password.'));
+          console.log(chalk.yellow('⚠️  Existing sessions encrypted with the old key will need to be wiped:'));
+          console.log(chalk.dim('   rm ~/.cloakclaw/mappings.db'));
+        } catch (e) { console.error(chalk.red(e.message)); process.exit(1); }
+        break;
+      }
+
+      case 'remove': {
+        if (!isPasswordProtected()) { console.log(chalk.dim('No password set')); break; }
+        const pw = await ask('Current password to remove: ');
+        try { unlockWithPassword(pw); } catch { console.error(chalk.red('Wrong password')); process.exit(1); }
+        removePassword();
+        console.log(chalk.green('🔓 Password removed. Reverted to auto-generated key.'));
+        console.log(chalk.yellow('⚠️  Existing encrypted data needs a fresh DB:'));
+        console.log(chalk.dim('   rm ~/.cloakclaw/mappings.db'));
+        break;
+      }
+
+      default:
+        console.error(chalk.red('Unknown action. Use: set, remove, status'));
+        process.exit(1);
+    }
+  });
+
+program
   .command('serve')
   .description('Start the web UI')
   .option('-p, --port <port>', 'port number', '3900')

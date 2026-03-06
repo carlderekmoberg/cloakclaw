@@ -339,6 +339,33 @@
       </div>
     </div>
 
+    <div class="settings-group" style="margin-top:16px">
+      <h3>🔒 Database Password</h3>
+      <p style="font-size:12px;color:var(--dim);margin-bottom:12px">
+        Protect your mapping database with a password. Without it, the auto-generated key file is used.
+      </p>
+      <div id="pwStatus" style="margin-bottom:12px"></div>
+      <div id="pwForm">
+        <div class="setting-row" id="pwCurrentRow" style="display:none">
+          <label>Current password</label>
+          <input id="pwCurrent" type="password" placeholder="Enter current password">
+        </div>
+        <div class="setting-row">
+          <label>New password</label>
+          <input id="pwNew" type="password" placeholder="Set a password (min 4 chars)">
+        </div>
+        <div class="setting-row">
+          <label>Confirm</label>
+          <input id="pwConfirm" type="password" placeholder="Confirm password">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="primary" onclick="setDbPassword()">🔒 Set Password</button>
+          <button id="pwRemoveBtn" style="display:none" onclick="removeDbPassword()">🔓 Remove Password</button>
+        </div>
+        <span id="pwMsg" style="font-size:12px;margin-top:6px;display:block"></span>
+      </div>
+    </div>
+
     <div class="settings-group" style="margin-top:16px;border-color:var(--red);border-style:dashed">
       <h3>⚠️ Legal Disclaimer</h3>
       <div style="font-size:12px;color:var(--dim);line-height:1.7">
@@ -372,7 +399,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
     if (tab.dataset.panel === 'sessions') loadSessions();
-    if (tab.dataset.panel === 'settings') loadSettings();
+    if (tab.dataset.panel === 'settings') { loadSettings(); loadPasswordStatus(); }
     if (tab.dataset.panel === 'decloak') loadSessionSelect();
     if (tab.dataset.panel === 'features') loadFeatures();
   });
@@ -461,6 +488,71 @@ function toggleAllEntities(on) {
       if (chip) chip.querySelector('input').checked = false;
     }
   });
+}
+
+// Password management
+async function loadPasswordStatus() {
+  try {
+    const r = await fetch(API + '/api/password/status');
+    const d = await r.json();
+    const el = document.getElementById('pwStatus');
+    const currentRow = document.getElementById('pwCurrentRow');
+    const removeBtn = document.getElementById('pwRemoveBtn');
+    if (d.protected) {
+      el.innerHTML = '<span style="color:var(--green)">🔒 Password protection is <strong>enabled</strong></span>';
+      currentRow.style.display = '';
+      removeBtn.style.display = '';
+    } else {
+      el.innerHTML = '<span style="color:var(--orange)">🔓 No password set — using auto-generated key file</span>';
+      currentRow.style.display = 'none';
+      removeBtn.style.display = 'none';
+    }
+  } catch {}
+}
+
+async function setDbPassword() {
+  const pw = document.getElementById('pwNew').value;
+  const confirm = document.getElementById('pwConfirm').value;
+  const msg = document.getElementById('pwMsg');
+  if (pw.length < 4) { msg.textContent = '✗ Min 4 characters'; msg.style.color = 'var(--red)'; return; }
+  if (pw !== confirm) { msg.textContent = '✗ Passwords do not match'; msg.style.color = 'var(--red)'; return; }
+  try {
+    const body = { password: pw };
+    const current = document.getElementById('pwCurrent').value;
+    if (current) body.current = current;
+    const r = await fetch(API + '/api/password/set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) {
+      msg.textContent = '✓ Password set!';
+      msg.style.color = 'var(--green)';
+      document.getElementById('pwNew').value = '';
+      document.getElementById('pwConfirm').value = '';
+      document.getElementById('pwCurrent').value = '';
+      loadPasswordStatus();
+    } else {
+      msg.textContent = '✗ ' + d.error;
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) { msg.textContent = '✗ ' + e.message; msg.style.color = 'var(--red)'; }
+}
+
+async function removeDbPassword() {
+  const pw = document.getElementById('pwCurrent').value;
+  const msg = document.getElementById('pwMsg');
+  if (!pw) { msg.textContent = '✗ Enter current password first'; msg.style.color = 'var(--red)'; return; }
+  try {
+    const r = await fetch(API + '/api/password/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+    const d = await r.json();
+    if (d.ok) {
+      msg.textContent = '✓ Password removed';
+      msg.style.color = 'var(--green)';
+      document.getElementById('pwCurrent').value = '';
+      loadPasswordStatus();
+    } else {
+      msg.textContent = '✗ ' + d.error;
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) { msg.textContent = '✗ ' + e.message; msg.style.color = 'var(--red)'; }
 }
 
 // Init entity toggles

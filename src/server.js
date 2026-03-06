@@ -9,6 +9,7 @@ import { getConfig, setConfig, getConfigValue } from './config.js';
 import { listProfiles } from './profiles/index.js';
 import { isOllamaAvailable } from './ner/llm-pass.js';
 import { extractText, SUPPORTED_EXTENSIONS } from './extract.js';
+import { isPasswordProtected, unlockWithPassword, setPassword, removePassword } from './store/crypto.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.CLOAKCLAW_PORT || 3900;
@@ -297,6 +298,49 @@ const server = createServer(async (req, res) => {
       const store = new MappingStore();
       store.voteFeatureRequest(id);
       store.close();
+      return json(res, { ok: true });
+    }
+
+    // GET /api/password/status
+    if (path === '/api/password/status' && req.method === 'GET') {
+      return json(res, { protected: isPasswordProtected() });
+    }
+
+    // POST /api/password/unlock
+    if (path === '/api/password/unlock' && req.method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.password) return json(res, { error: 'password required' }, 400);
+      try {
+        unlockWithPassword(body.password);
+        return json(res, { ok: true });
+      } catch (e) {
+        return json(res, { error: e.message }, 401);
+      }
+    }
+
+    // POST /api/password/set
+    if (path === '/api/password/set' && req.method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.password) return json(res, { error: 'password required' }, 400);
+      try {
+        if (isPasswordProtected() && body.current) {
+          unlockWithPassword(body.current);
+        }
+        setPassword(body.password);
+        return json(res, { ok: true, message: 'Password set. Wipe old DB if changing password.' });
+      } catch (e) {
+        return json(res, { error: e.message }, 400);
+      }
+    }
+
+    // POST /api/password/remove
+    if (path === '/api/password/remove' && req.method === 'POST') {
+      const body = await parseBody(req);
+      if (isPasswordProtected()) {
+        if (!body.password) return json(res, { error: 'current password required' }, 400);
+        try { unlockWithPassword(body.password); } catch (e) { return json(res, { error: e.message }, 401); }
+      }
+      removePassword();
       return json(res, { ok: true });
     }
 

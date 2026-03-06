@@ -39,45 +39,28 @@ function parseRawBody(req) {
   });
 }
 
-// Simple multipart parser for file uploads
+// Multipart parser using Node's built-in Request/FormData (Node 22+)
 async function parseMultipart(req) {
-  const contentType = req.headers['content-type'] || '';
-  const boundary = contentType.split('boundary=')[1];
-  if (!boundary) return { fields: {}, files: [] };
-
   const raw = await parseRawBody(req);
-  const parts = [];
-  const sep = Buffer.from('--' + boundary);
+  const contentType = req.headers['content-type'] || '';
 
-  let start = 0;
-  while (true) {
-    const idx = raw.indexOf(sep, start);
-    if (idx === -1) break;
-    if (start > 0) {
-      // Extract part between separators (skip \r\n after separator)
-      const partData = raw.slice(start, idx - 2); // -2 for \r\n before next boundary
-      parts.push(partData);
-    }
-    start = idx + sep.length + 2; // skip boundary + \r\n
-    if (raw.slice(idx + sep.length, idx + sep.length + 2).toString() === '--') break; // end marker
-  }
+  // Use the Web API Request to parse multipart
+  const request = new Request('http://localhost', {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body: raw,
+  });
 
+  const formData = await request.formData();
   const fields = {};
   const files = [];
 
-  for (const part of parts) {
-    const headerEnd = part.indexOf('\r\n\r\n');
-    if (headerEnd === -1) continue;
-    const headers = part.slice(0, headerEnd).toString();
-    const body = part.slice(headerEnd + 4);
-
-    const nameMatch = headers.match(/name="([^"]+)"/);
-    const filenameMatch = headers.match(/filename="([^"]+)"/);
-
-    if (filenameMatch) {
-      files.push({ fieldName: nameMatch?.[1], filename: filenameMatch[1], data: body });
-    } else if (nameMatch) {
-      fields[nameMatch[1]] = body.toString();
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File) {
+      const arrayBuf = await value.arrayBuffer();
+      files.push({ fieldName: key, filename: value.name, data: Buffer.from(arrayBuf) });
+    } else {
+      fields[key] = value;
     }
   }
 

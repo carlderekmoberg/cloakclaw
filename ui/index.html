@@ -183,20 +183,24 @@
   </div>
 
   <!-- DECLOAK PANEL -->
+  <!-- DECLOAK PANEL -->
   <div class="panel" id="panel-decloak">
+    <div class="info-bar">
+      <div class="stat"><span class="stat-label">How it works</span><span class="stat-value" style="font-size:13px;font-weight:400">Paste the LLM's response → select the session it was cloaked with → hit Decloak. All fake names, numbers, and dates get restored to originals.</span></div>
+    </div>
     <div class="cloak-grid">
       <div class="textarea-wrap">
-        <label>LLM Response (cloaked)</label>
-        <textarea id="decloakInput" placeholder="Paste the LLM's response here..."></textarea>
+        <label>LLM Response (cloaked names/numbers)</label>
+        <textarea id="decloakInput" placeholder="Paste the cloud LLM's response here...&#10;&#10;Example: The agreement between Michael Chen and&#10;Northstar Solutions valued at $1,729,369..."></textarea>
       </div>
       <div class="textarea-wrap">
-        <label>Restored Output</label>
-        <textarea id="decloakOutput" readonly placeholder="De-cloaked text will appear here..."></textarea>
+        <label>Restored Output (real names/numbers)</label>
+        <textarea id="decloakOutput" readonly placeholder="De-cloaked text will appear here with all original entities restored..."></textarea>
       </div>
     </div>
     <div class="controls">
-      <select id="sessionSelect"><option value="">Select a session...</option></select>
-      <button class="green" onclick="doDecloak()">🔓 Decloak</button>
+      <select id="sessionSelect" style="min-width:300px"><option value="">📋 Select a cloaking session...</option></select>
+      <button class="green" onclick="doDecloak()">🔓 Decloak Response</button>
       <button onclick="navigator.clipboard.writeText(document.getElementById('decloakOutput').value)">📋 Copy</button>
       <span id="decloakStatus" style="font-size:13px;color:var(--dim)"></span>
     </div>
@@ -204,8 +208,13 @@
 
   <!-- SESSIONS PANEL -->
   <div class="panel" id="panel-sessions">
-    <h2 style="font-size:18px;margin-bottom:4px">Session History</h2>
-    <p style="color:var(--dim);font-size:13px;margin-bottom:16px">Every cloak operation is stored locally. Click to view details.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <h2 style="font-size:18px;margin-bottom:4px">Session History</h2>
+        <p style="color:var(--dim);font-size:13px">Every cloak operation is stored locally in SQLite. Click any session to view its entity mappings.</p>
+      </div>
+      <div id="sessionStats" style="font-size:13px;color:var(--dim)"></div>
+    </div>
     <div id="sessionList" class="session-list"><p class="empty">Loading...</p></div>
     <div id="sessionDetail" class="session-detail" style="display:none"></div>
   </div>
@@ -213,9 +222,11 @@
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings">
     <h2 style="font-size:18px;margin-bottom:4px">Configuration</h2>
-    <p style="color:var(--dim);font-size:13px">Settings are stored at <code>~/.cloakclaw/config.yaml</code></p>
+    <p style="color:var(--dim);font-size:13px;margin-bottom:8px">Settings stored at <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">~/.cloakclaw/config.yaml</code></p>
+
     <div class="settings-group">
-      <h3>🤖 Ollama</h3>
+      <h3>🤖 Ollama Connection</h3>
+      <p style="color:var(--dim);font-size:12px;margin-bottom:12px">Local LLM used for detecting names and companies. Regex patterns work without Ollama.</p>
       <div class="setting-row">
         <label>Server URL</label>
         <input id="cfgOllamaUrl" placeholder="http://localhost:11434">
@@ -224,19 +235,43 @@
         <label>Model</label>
         <input id="cfgOllamaModel" placeholder="qwen2.5:7b">
       </div>
-      <button class="primary" onclick="saveSettings()">Save Settings</button>
-      <span id="settingsStatus" style="font-size:13px;color:var(--dim);margin-left:12px"></span>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+        <button class="primary" onclick="saveSettings()">💾 Save Settings</button>
+        <button onclick="testOllama()">🔌 Test Connection</button>
+        <span id="settingsStatus" style="font-size:13px;color:var(--dim)"></span>
+      </div>
     </div>
+
     <div class="settings-group" style="margin-top:16px">
-      <h3>📊 Stats</h3>
+      <h3>📊 Usage Stats</h3>
       <div id="statsArea" style="font-size:13px;color:var(--dim)">Loading...</div>
+    </div>
+
+    <div class="settings-group" style="margin-top:16px">
+      <h3>📜 Document Profiles</h3>
+      <div id="profilesArea" style="font-size:13px;color:var(--dim)">Loading...</div>
+    </div>
+
+    <div class="settings-group" style="margin-top:16px">
+      <h3>ℹ️ About CloakClaw</h3>
+      <div style="font-size:13px;color:var(--dim);line-height:1.6">
+        <p><strong style="color:var(--text)">CloakClaw v0.1.0</strong> — Local AI Privacy Proxy</p>
+        <p style="margin-top:4px">Two-pass NER: regex patterns + Ollama LLM context analysis.<br>
+        All mappings stored locally in SQLite. Zero cloud dependency for cloaking.<br>
+        Data never leaves your machine.</p>
+        <p style="margin-top:8px">
+          <a href="https://cloakclaw.com" target="_blank" style="color:var(--accent);text-decoration:none">cloakclaw.com</a> ·
+          <a href="https://github.com/carlderekmoberg/cloakclaw" target="_blank" style="color:var(--accent);text-decoration:none">GitHub</a>
+        </p>
+      </div>
     </div>
   </div>
 
 </div>
 
 <script>
-const API = '';
+// Auto-detect API base — works both at localhost:3900 and behind proxy at /cloakclaw/
+const API = window.location.pathname.replace(/\/+$/, '');
 let lastSessionId = null;
 
 // Tabs
@@ -471,17 +506,34 @@ async function loadSessions() {
     const r = await fetch(API + '/api/sessions?limit=50');
     const d = await r.json();
     const el = document.getElementById('sessionList');
-    if (!d.sessions.length) { el.innerHTML = '<p class="empty">No sessions yet. Cloak a document to get started.</p>'; return; }
-    el.innerHTML = d.sessions.map(s => `
+    const statsEl = document.getElementById('sessionStats');
+
+    if (!d.sessions.length) {
+      el.innerHTML = '<p class="empty">No sessions yet. Cloak a document to get started.</p>';
+      statsEl.textContent = '';
+      return;
+    }
+
+    const totalEntities = d.sessions.reduce((sum, s) => sum + (s.entity_count || 0), 0);
+    statsEl.textContent = `${d.sessions.length} sessions · ${totalEntities} entities protected`;
+
+    el.innerHTML = d.sessions.map(s => {
+      const profileIcons = { legal: '📜', financial: '💰', email: '✉️' };
+      const icon = profileIcons[s.profile] || '📄';
+      return `
       <div class="session-card" onclick="loadSession('${s.id}')">
-        <span class="id">${s.id.slice(0,8)}…</span> <span class="profile-badge">${s.profile}</span>
-        <div class="meta">
-          <span>${s.entity_count || 0} entities</span>
-          <span>${s.original_length} → ${s.cloaked_length} chars</span>
-          <span>${s.created_at}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.3rem">${icon}</span>
+          <span class="id">${s.id.slice(0,8)}…</span>
+          <span class="profile-badge">${s.profile}</span>
         </div>
-      </div>
-    `).join('');
+        <div class="meta">
+          <span>🛡️ ${s.entity_count || 0} entities</span>
+          <span>📄 ${(s.original_length || 0).toLocaleString()} → ${(s.cloaked_length || 0).toLocaleString()} chars</span>
+          <span>🕐 ${s.created_at}</span>
+        </div>
+      </div>`;
+    }).join('');
   } catch {}
 }
 
@@ -509,13 +561,54 @@ async function loadSettings() {
     document.getElementById('cfgOllamaUrl').value = d.ollama?.url || '';
     document.getElementById('cfgOllamaModel').value = d.ollama?.model || '';
 
+    // Stats
     const stats = document.getElementById('statsArea');
     const sr = await fetch(API + '/api/sessions?limit=1000');
     const sd = await sr.json();
     const total = sd.sessions.length;
     const entities = sd.sessions.reduce((sum, s) => sum + (s.entity_count || 0), 0);
-    stats.textContent = `${total} sessions · ${entities} total entities cloaked`;
-  } catch {}
+    const totalChars = sd.sessions.reduce((sum, s) => sum + (s.original_length || 0), 0);
+    stats.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px">
+        <div><div style="font-size:24px;font-weight:700;color:var(--accent)">${total}</div><div>Sessions</div></div>
+        <div><div style="font-size:24px;font-weight:700;color:var(--green)">${entities}</div><div>Entities Protected</div></div>
+        <div><div style="font-size:24px;font-weight:700;color:var(--purple)">${(totalChars/1000).toFixed(0)}K</div><div>Characters Processed</div></div>
+      </div>`;
+
+    // Profiles
+    const pr = await fetch(API + '/api/profiles');
+    const pd = await pr.json();
+    const profileIcons = { legal: '📜', financial: '💰', email: '✉️' };
+    document.getElementById('profilesArea').innerHTML = pd.profiles.map(p => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:1.3rem">${profileIcons[p.name] || '📄'}</span>
+        <div>
+          <div style="color:var(--text);font-weight:600;text-transform:capitalize">${p.name}</div>
+          <div style="font-size:11px">${p.description}</div>
+        </div>
+        <div style="margin-left:auto;font-size:11px;color:var(--accent)">${(p.entityTypes || []).length || '~10'} entity types</div>
+      </div>
+    `).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function testOllama() {
+  const status = document.getElementById('settingsStatus');
+  status.innerHTML = '<span class="spinner"></span> Testing...';
+  try {
+    const r = await fetch(API + '/api/status');
+    const d = await r.json();
+    if (d.ollama.available) {
+      status.textContent = `✓ Connected to ${d.ollama.model}`;
+      status.style.color = 'var(--green)';
+    } else {
+      status.textContent = '✗ Ollama not reachable';
+      status.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = 'var(--red)';
+  }
 }
 
 async function saveSettings() {

@@ -79,7 +79,9 @@ const server = createServer(async (req, res) => {
   }
 
   const url = new URL(req.url, `http://localhost:${PORT}`);
-  const path = url.pathname;
+  // Strip /cloakclaw prefix if proxied through command center
+  const rawPath = url.pathname;
+  const path = rawPath.startsWith('/cloakclaw') ? rawPath.slice('/cloakclaw'.length) || '/' : rawPath;
 
   try {
     // === Static UI ===

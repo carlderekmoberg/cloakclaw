@@ -25,7 +25,14 @@ const PATTERNS = [
   { type: 'percentage', regex: /\b\d+(?:\.\d+)?%/g },
 
   // Account numbers (8+ digits, possibly with dashes/spaces)
-  { type: 'account', regex: /\b(?:account|acct|routing|aba)[\s#:]*\d[\d\s-]{7,}\b/gi },
+  { type: 'account', regex: /\b(?:account|acct|routing|aba|brokerage|portfolio|policy|member|client|customer|invoice|ref|reference)[\s#:]*\d[\d\s-]{7,}\b/gi },
+
+  // Credit card numbers (13-19 digits, possibly with dashes/spaces)
+  { type: 'account', regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g },
+
+  // EIN / Tax ID (XX-XXXXXXX format)
+  { type: 'account', regex: /\b(?:EIN|Tax\s*ID|TIN)[\s#:]*\d{2}-\d{7}\b/gi },
+  { type: 'account', regex: /\b\d{2}-\d{7}\b/g, minContext: true },
 
   // Case numbers
   { type: 'case_number', regex: /\b(?:Case|Docket|File)\s*(?:No\.?|Number|#)\s*[\w-]+\b/gi },

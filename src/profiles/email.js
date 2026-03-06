@@ -3,7 +3,7 @@ export const emailProfile = {
   description: 'Business correspondence, emails, messages',
   entityTypes: [
     'person', 'company', 'email', 'phone', 'dollar',
-    'date', 'url', 'address',
+    'date', 'url', 'address', 'account', 'ssn',
   ],
   llmTypes: ['person', 'company'],
 };

@@ -82,9 +82,9 @@ async function parseMultipart(req) {
 // Auto-expire old sessions on startup
 try {
   const _store = new MappingStore();
-  const expiry = _store.expireOldSessions(30);
+  const expiry = _store.expireOldSessions(7);
   if (expiry.expiredSessions > 0) {
-    console.log(`♻️  Expired ${expiry.expiredSessions} sessions older than 30 days (${expiry.expiredMappings} mappings)`);
+    console.log(`♻️  Expired ${expiry.expiredSessions} sessions older than 7 days (${expiry.expiredMappings} mappings)`);
   }
   _store.close();
 } catch {}

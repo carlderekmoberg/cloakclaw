@@ -138,8 +138,8 @@ export class MappingStore {
     this.db.prepare('UPDATE feature_requests SET status = ? WHERE id = ?').run(status, id);
   }
 
-  // Auto-expire old sessions (default 30 days)
-  expireOldSessions(days = 30) {
+  // Auto-expire old sessions (default 7 days)
+  expireOldSessions(days = 7) {
     const result = this.db.prepare(`
       DELETE FROM mappings WHERE session_id IN (
         SELECT id FROM sessions WHERE created_at < datetime('now', ?)

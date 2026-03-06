@@ -118,6 +118,13 @@
   .file-badge .fb-size { color: var(--dim); }
   .file-badge .fb-remove { color: var(--red); cursor: pointer; margin-left: 4px; }
 
+  /* Entity Toggles */
+  .entity-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 11px; cursor: pointer; user-select: none; transition: all 0.15s; border: 1px solid var(--border); }
+  .entity-chip input { display: none; }
+  .entity-chip.active { background: rgba(0,212,255,0.12); border-color: var(--accent); color: var(--accent); }
+  .entity-chip:not(.active) { background: var(--bg); color: var(--dim); opacity: 0.6; }
+  .entity-chip:hover { opacity: 1; }
+
   .session-detail { margin-top: 16px; }
   .empty { color: var(--dim); font-style: italic; margin-top: 40px; text-align: center; }
 </style>
@@ -162,7 +169,7 @@
       </div>
     </div>
     <div class="controls">
-      <select id="profileSelect">
+      <select id="profileSelect" onchange="updateEntityToggles()">
         <option value="legal">📜 Legal</option>
         <option value="financial">💰 Financial</option>
         <option value="email" selected>✉️ Email</option>
@@ -171,6 +178,16 @@
       <button class="primary" id="cloakBtn" onclick="doCloak()">🔒 Cloak Document</button>
       <button onclick="copyOutput()">📋 Copy</button>
       <span id="cloakStatus" style="font-size:13px;color:var(--dim)"></span>
+    </div>
+    <div id="entityToggles" style="margin-top:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px">Entity Types to Cloak</span>
+        <div style="display:flex;gap:8px">
+          <a href="#" onclick="toggleAllEntities(true);return false" style="font-size:11px;color:var(--accent);text-decoration:none">Select All</a>
+          <a href="#" onclick="toggleAllEntities(false);return false" style="font-size:11px;color:var(--dim);text-decoration:none">Deselect All</a>
+        </div>
+      </div>
+      <div id="entityCheckboxes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
     <div class="progress-feed" id="progressFeed"></div>
     <div class="mappings" id="mappingsSection" style="display:none">
@@ -304,6 +321,71 @@ async function checkStatus() {
   } catch { }
 }
 
+// Profile entity type definitions
+const PROFILE_ENTITIES = {
+  legal: ['person', 'company', 'address', 'dollar', 'date', 'case_number', 'jurisdiction', 'phone', 'email', 'ssn'],
+  financial: ['person', 'company', 'account', 'dollar', 'percentage', 'date', 'bank', 'phone', 'email', 'address', 'ssn'],
+  email: ['person', 'company', 'email', 'phone', 'dollar', 'date', 'url', 'address'],
+};
+
+const TYPE_LABELS = {
+  person: '👤 People', company: '🏢 Companies', email: '📧 Emails', phone: '📱 Phones',
+  dollar: '💰 Dollars', date: '📅 Dates', ssn: '🔐 SSNs', account: '🏦 Accounts',
+  api_key: '🔑 API Keys', url: '🔗 URLs', address: '📍 Addresses',
+  case_number: '⚖️ Case Numbers', jurisdiction: '🏛️ Jurisdictions', bank: '🏦 Banks',
+  percentage: '📊 Percentages',
+};
+
+let enabledEntities = new Set();
+
+function updateEntityToggles() {
+  const profile = document.getElementById('profileSelect').value;
+  const types = PROFILE_ENTITIES[profile] || PROFILE_ENTITIES.email;
+  const container = document.getElementById('entityCheckboxes');
+
+  enabledEntities = new Set(types); // default: all on
+
+  container.innerHTML = types.map(type => {
+    const label = TYPE_LABELS[type] || type;
+    return `<label class="entity-chip active" id="chip-${type}" onclick="toggleEntity('${type}')">
+      <input type="checkbox" checked> ${label}
+    </label>`;
+  }).join('');
+}
+
+function toggleEntity(type) {
+  const chip = document.getElementById('chip-' + type);
+  if (enabledEntities.has(type)) {
+    enabledEntities.delete(type);
+    chip.classList.remove('active');
+    chip.querySelector('input').checked = false;
+  } else {
+    enabledEntities.add(type);
+    chip.classList.add('active');
+    chip.querySelector('input').checked = true;
+  }
+}
+
+function toggleAllEntities(on) {
+  const profile = document.getElementById('profileSelect').value;
+  const types = PROFILE_ENTITIES[profile] || [];
+  types.forEach(type => {
+    const chip = document.getElementById('chip-' + type);
+    if (on) {
+      enabledEntities.add(type);
+      chip?.classList.add('active');
+      if (chip) chip.querySelector('input').checked = true;
+    } else {
+      enabledEntities.delete(type);
+      chip?.classList.remove('active');
+      if (chip) chip.querySelector('input').checked = false;
+    }
+  });
+}
+
+// Init entity toggles
+updateEntityToggles();
+
 // Entity type icons
 const TYPE_ICONS = {
   person: '👤', company: '🏢', email: '📧', phone: '📱', dollar: '💰',
@@ -360,6 +442,7 @@ async function doCloak() {
         text,
         profile: document.getElementById('profileSelect').value,
         useLlm: document.getElementById('useLlm').checked,
+        entityTypes: [...enabledEntities],
       }),
     });
 

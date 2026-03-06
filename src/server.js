@@ -141,6 +141,7 @@ const server = createServer(async (req, res) => {
       if (!body.text) return json(res, { error: 'text is required' }, 400);
       const profile = body.profile || 'email';
       const useLlm = body.useLlm !== false;
+      const entityTypes = body.entityTypes || null; // null = all
 
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -156,6 +157,7 @@ const server = createServer(async (req, res) => {
       const cloaker = new Cloaker({
         interactive: false,
         useLlm,
+        entityTypes,
         onProgress: (step, data) => send('progress', { step, ...data }),
       });
 

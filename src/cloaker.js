@@ -14,6 +14,7 @@ export class Cloaker {
     this.useLlm = opts.useLlm !== false;
     this.isTTY = process.stderr.isTTY;
     this.onProgress = opts.onProgress || null; // callback(step, data)
+    this.entityTypes = opts.entityTypes || null; // null = use profile defaults
   }
 
   _emit(step, data = {}) {
@@ -45,10 +46,16 @@ export class Cloaker {
       process.stderr.write(chalk.dim(`Profile: ${profile.name} — ${profile.description}\n`));
     }
 
+    // Use custom entity types if provided, otherwise profile defaults
+    const activeEntityTypes = this.entityTypes || profile.entityTypes;
+    const activeLlmTypes = this.entityTypes
+      ? profile.llmTypes.filter(t => this.entityTypes.includes(t))
+      : profile.llmTypes;
+
     // Pass 1: Regex
     this._emit('regex_start', {});
     if (this.isTTY) process.stderr.write(chalk.cyan('⚡ Regex pass... '));
-    let entities = regexPass(text, profile.entityTypes);
+    let entities = regexPass(text, activeEntityTypes);
     if (this.isTTY) process.stderr.write(chalk.cyan(`${entities.length} entities\n`));
 
     // Summarize found types
@@ -57,12 +64,12 @@ export class Cloaker {
     this._emit('regex_done', { count: entities.length, types: typeCounts });
 
     // Pass 2: LLM (if enabled and available)
-    if (this.useLlm && profile.llmTypes.length > 0) {
+    if (this.useLlm && activeLlmTypes.length > 0) {
       this._emit('llm_start', { model: (await import('./config.js')).getConfig().ollama.model });
       if (this.isTTY) process.stderr.write(chalk.cyan('🧠 LLM pass... '));
       const ollamaUp = await isOllamaAvailable();
       if (ollamaUp) {
-        const llmEntities = await llmPass(text, profile.name, profile.llmTypes, entities);
+        const llmEntities = await llmPass(text, profile.name, activeLlmTypes, entities);
         if (this.isTTY) process.stderr.write(chalk.cyan(`${llmEntities.length} additional entities\n`));
 
         const llmTypeCounts = {};
